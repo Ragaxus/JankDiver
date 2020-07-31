@@ -1,0 +1,6 @@
+/.env
+/.pylintrc
+/.vscode
+/credentials.json
+/token.pickle
+/__pycache__
