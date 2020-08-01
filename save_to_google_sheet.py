@@ -45,7 +45,7 @@ class GoogleDeckSaver:
     def save_deck(self, data):
         """Given an array, saves that array as a row in the Data sheet."""
         sheet = self.service.spreadsheets()
-        body = {"values": [data]}
+        body = {"values": data}
         sheet.values().append(body=body,
                               spreadsheetId=self.spreadsheet_id,
                               range="Decks!C1",
