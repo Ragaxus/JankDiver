@@ -46,19 +46,20 @@ async def save_decks_from_messages(msg_list):
        determines if it has a file attached. If it does, parse it as a deck file
        and save that file to the Google Sheet.
        Returns the number of decks."""
-    decks_found=0
+    decks_found = 0
     all_deck_data = []
     for msg in msg_list:
         if len(msg.attachments) > 0:
             try:
                 deck_bytes = await msg.attachments[0].read()
                 deck_metadata = [msg.author.name, "",
-                                msg.created_at.date().isoformat()]
-                deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
+                                 msg.created_at.date().isoformat()]
+                deck = deck_bytes.decode(
+                    chardet.detect(deck_bytes)["encoding"])
                 deck_data = parse_deck(deck)
                 all_deck_data.append(deck_metadata + deck_data)
                 decks_found += 1
-            except print(0):
+            except:
                 pass
     service.save_deck(all_deck_data)
     return decks_found
