@@ -52,7 +52,7 @@ async def save_decks_from_messages(msg_list):
         if len(msg.attachments) > 0:
             try:
                 deck_bytes = await msg.attachments[0].read()
-                deck_metadata = [msg.author.name, "",
+                deck_metadata = [msg.author.name, "", "",
                                  msg.created_at.date().isoformat()]
                 deck = deck_bytes.decode(
                     chardet.detect(deck_bytes)["encoding"])
