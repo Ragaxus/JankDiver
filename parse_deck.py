@@ -12,7 +12,7 @@ def parse_deck(deck_string):
     """
     cards = []
     card_regex = re.compile(r'1 ([^\(]+)')
-    for line in deck_string.split('\n'):
+    for line in [l.rstrip() for l in deck_string.split('\n')]:
         if line == "Sideboard":
             break
         if line.startswith('1 '):
@@ -21,5 +21,7 @@ def parse_deck(deck_string):
 
 
 if __name__ == "__main__":
-    deck = open(r"C:\Users\sgold\Downloads\Grixis_Control_7.25.20.txt", 'r').read()
+    import chardet
+    deck_bytes = open(r"C:\Users\sgold\Downloads\Stav_20200802.txt", 'rb').read()
+    deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
     print(parse_deck(deck))

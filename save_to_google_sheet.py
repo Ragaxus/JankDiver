@@ -42,12 +42,19 @@ class GoogleDeckSaver:
 
         self.service = build('sheets', 'v4', credentials=creds)
 
-    def save_deck(self, data):
-        """Given an array, saves that array as a row in the Data sheet."""
+    def save_data(self, data, location):
+        """Given an array and a Sheets location, saves that array 
+        as a row or rows at that location."""
         sheet = self.service.spreadsheets()
         body = {"values": data}
         sheet.values().append(body=body,
                               spreadsheetId=self.spreadsheet_id,
-                              range="Decks!C1",
+                              range=location,
                               includeValuesInResponse=False,
                               valueInputOption="RAW").execute()
+    def save_deck(self, data):
+        """Wrapper on save_data that saves the data to the Decks sheet."""
+        self.save_data(data, "Decks!C1")
+    def save_draft_log(self, data):
+        """Wrapper on save_data that saves the data to the Draft Logs sheet."""
+        self.save_data(data, "Draft Logs!A1")
