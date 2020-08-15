@@ -6,9 +6,10 @@ import os.path
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from draftdata import DraftData
 
 
-class GoogleDeckSaver:
+class GoogleDraftDataSaver:
     """Appends deck data to a given spreadsheet's 'Data' page."""
 
     # If modifying these scopes, delete the file token.pickle.
@@ -42,19 +43,70 @@ class GoogleDeckSaver:
 
         self.service = build('sheets', 'v4', credentials=creds)
 
-    def save_data(self, data, location):
-        """Given an array and a Sheets location, saves that array 
-        as a row or rows at that location."""
+    def write_to_sheet(self, data: DraftData):
+        """Given a DraftData, saves the contents of the DraftData
+        to a Google spreadsheet in a manner that matches its data type.
+        If the DraftData's dataType is 'deck', the DraftData's data is
+        a deck's maindeck and sideboard. We will save the maindeck to the Decks sheet,
+        and the sideboard to the Sideboards sheet."""
         sheet = self.service.spreadsheets()
-        body = {"values": data}
-        sheet.values().append(body=body,
-                              spreadsheetId=self.spreadsheet_id,
-                              range=location,
-                              includeValuesInResponse=False,
-                              valueInputOption="RAW").execute()
-    def save_deck(self, data):
-        """Wrapper on save_data that saves the data to the Decks sheet."""
-        self.save_data(data, "Decks!C1")
-    def save_draft_log(self, data):
-        """Wrapper on save_data that saves the data to the Draft Logs sheet."""
-        self.save_data(data, "Draft Logs!A1")
+
+        if data.type == "deck":
+            #write the main deck
+            #placeholders for colors and record
+            deck_metadata = [data.user, "", "", data.timestamp]
+            cell_data = deck_metadata + data.data[0]
+            body = {"values": [cell_data]}
+            sheet.values().append(body=body,
+                                  spreadsheetId=self.spreadsheet_id,
+                                  range="Decks!a1",
+                                  includeValuesInResponse=False,
+                                  valueInputOption="RAW").execute()
+            #write the sideboard
+            #(no placeholders - no need to fill in that info twice)
+            sb_metadata = [data.user, data.timestamp]
+            cell_data = sb_metadata + data.data[1]
+            body = {"values": [cell_data]}
+            sheet.values().append(body=body,
+                                  spreadsheetId=self.spreadsheet_id,
+                                  range="Sideboards!A1",
+                                  includeValuesInResponse=False,
+                                  valueInputOption="RAW").execute()
+
+
+        if data.type == "draft":
+            #write the draft seats
+            cell_values = []
+            cell_values.append([data.timestamp, data.number_of_players])
+            for user_representation in data.data:
+                cell_values.append([user_representation["name"]] + user_representation["picks"])
+            cell_values.append([""])
+            body = {"values": cell_values}
+            sheet.values().append(body=body,
+                                  spreadsheetId=self.spreadsheet_id,
+                                  range="Draft Logs!A1",
+                                  includeValuesInResponse=False,
+                                  valueInputOption="RAW").execute()
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import chardet
+
+    load_dotenv()
+    SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
+
+    # Call the Sheets API
+    service = GoogleDraftDataSaver(SPREADSHEET_ID)
+
+    DECK_FILE_PATH = r"C:\Users\sgold\Documents\Arena Cube Drafts\take_me_to_church.txt"
+    LOG_FILE_PATH = r"C:\Users\sgold\Downloads\DraftLog_APCd.txt"
+
+    deck_bytes = open(DECK_FILE_PATH, 'rb').read()
+    deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
+    deck_data = DraftData(deck, "Deck Submitter", 1)
+    service.write_to_sheet(deck_data)
+
+    log_bytes = open(LOG_FILE_PATH, 'rb').read()
+    log = log_bytes.decode(chardet.detect(deck_bytes)["encoding"])
+    log_data = DraftData(log, "Log Submitter", 2)
+    service.write_to_sheet(log_data)
