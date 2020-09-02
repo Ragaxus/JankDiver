@@ -77,9 +77,8 @@ class GoogleDraftDataSaver:
         if data.type == "draft":
             #write the draft seats
             cell_values = []
-            cell_values.append([data.timestamp, data.number_of_players])
             for user_representation in data.data:
-                cell_values.append([user_representation["name"]] + user_representation["picks"])
+                cell_values.append([data.timestamp, user_representation["name"]] + user_representation["picks"])
             cell_values.append([""])
             body = {"values": cell_values}
             sheet.values().append(body=body,
