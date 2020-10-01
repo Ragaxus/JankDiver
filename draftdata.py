@@ -2,58 +2,143 @@
 
 import re
 import time
+import datetime
 import json
+from save_to_google_sheet import GoogleDraftDataSaver
+from cubelist import CubeList, Cube
 
 
 class DraftData:
     """A parsed file from the #txt channel - either a deck, or a draft log."""
+    @staticmethod
+    def create(input_string, user, timestamp):
+        """Given an input string, looks at first character to see if it's a draft log or deck,
+        then returns the proper implementer of DraftData
+        Parameters
+        ----------
+        file : string
+        contents of a file downloaded from discord dump channel
+        """
+        if input_string[0] in ["C", "D"]: #To account for companions
+            return DeckList(input_string, user, timestamp)
+        elif input_string[0] == "{":
+            return DraftLog(input_string, user)
+        else:
+            raise DraftDataParseError(input_string[0])
 
+    def __init__(self):
+        self.timestamp = ""
+
+    def set_timestamp(self, timestamp: datetime):
+        """Sets the timestamps for the draft data using a standard format."""
+        self.timestamp = timestamp.strftime('%Y-%m-%d %H:%M')
+
+    #Abstract class method stubs -- don't change these
+    def parse(self, data: str):
+        """Abstract class method stub"""
+        raise NotImplementedError
+    def match_cubes(self, cube_list: CubeList):
+        """Abstract class method stub"""
+        raise NotImplementedError
+    def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
+        """Abstract class method stub"""
+        raise NotImplementedError
+
+class DeckList(DraftData):
+    """A parsed deck from a file submitted in the Discord channel."""
     def __init__(self, data_stream, user, timestamp):
-        self.type = ""       #once evaluated, will provide if this is a deck, a draft log, or other
+        super().__init__()
+
+        self.user = user
+        self.set_timestamp(timestamp)
+
+        self.maindeck = []
+        self.sideboard = []
+        self.companion = ""
+        self.parse(data_stream)
+
+    def parse(self, data: str):
+        """Given a deck as a string, returns a list of card names in the maindeck.
+        Parameters
+        ----------
+        data : string
+        A whole deck file as a string.
+        """
+
+        card_regex = re.compile(r'1 ([^\(]+)')
+
+        def add_card_to_maindeck(self, card_name):
+            self.maindeck.append(card_name)
+
+        def add_card_to_sideboard(self, card_name):
+            if card_name != self.companion:
+                self.sideboard.append(card_name)
+
+        def add_card_as_companion(self, card_name):
+            self.companion = card_name
+
+        add_methods = {
+            0: add_card_to_maindeck,
+            1: add_card_to_sideboard,
+            2: add_card_as_companion
+        }
+
+        for line in [l.rstrip() for l in data.split('\n')]:
+            if line == "Deck":
+                i = 0
+            elif line == "Sideboard":
+                i = 1
+            elif line == "Companion":
+                i = 2
+            elif line.startswith('1 '):
+                card_name = card_regex.match(line).group(1).rstrip().replace("////", "//")
+                add_methods[i](self, card_name)
+
+    def match_cubes(self, cube_list: CubeList):
+        cards_in_deck = self.maindeck + self.sideboard + [self.companion]
+        return cube_list.get_matches(cards_in_deck)
+
+    def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
+        #write the main deck
+        #placeholders for colors and record
+        deck_metadata = [self.user, "", "", self.timestamp]
+        cell_data = deck_metadata + [self.companion] + self.maindeck
+        service.write_to_sheet([cell_data], cube.subinfo.maindeck)
+
+        #write the sideboard
+        #(no placeholders - no need to fill in that info twice)
+        sb_metadata = [self.user, self.timestamp]
+        cell_data = sb_metadata + self.sideboard
+        service.write_to_sheet([cell_data], cube.subinfo.sideboard)
+
+class DraftLog(DraftData):
+    """A parsed draft log from a file submitted in the Discord channel."""
+    def __init__(self, data_stream, user):
+        super().__init__()
         self.user = user     #holds the user from whom the data was scraped
-        self.data = ""       #holds the parced data
-        self.timestamp = str(timestamp)
+        self.data = ""       #holds the parsed data
         self.number_of_players = 0
 
         self.parse(data_stream)
 
-
-    def parse_deck(self, deck_string):
-        """Given a deck as a string, returns a list of card names in the maindeck.
-        Parameters
-        ----------
-        deck_string : string
-        A whole deck file as a string.
-        """
-
-        cards = [[], []]
-        card_regex = re.compile(r'1 ([^\(]+)')
-        i = 0
-        for line in [l.rstrip() for l in deck_string.split('\n')]:
-            if line == "Sideboard":
-                i = 1
-            if line.startswith('1 '):
-                cards[i].append(card_regex.match(line).group(1).rstrip())
-        self.data = cards
-
-    def parse_draft(self, draft_log_string):
+    def parse(self, data: str):
         """Given a draft log as a string, returns players and the picked cards in pick order
         Parameters
         ----------
-        draft_log_string : string
+        data : string
         a downloaded draft log from mtgadraft.herokuapp.com/
         """
-        draft_log = json.loads(draft_log_string)
+        draft_log = json.loads(data)
 
-        timestamp_local_time = time.localtime(int(draft_log["time"])/1000)
-        self.timestamp = time.strftime('%Y-%m-%d %H:%M', timestamp_local_time)
+        timestamp = datetime.datetime.fromtimestamp(int(draft_log["time"])*.001)
+        self.set_timestamp(timestamp)
 
         user_representations = []
         number_of_players = 0
         for _, user in draft_log["users"].items():
             try:
                 name = user["userName"]
-                picks = DraftData(user["exportString"], "", "").data[0]
+                picks = DeckList(user["exportString"], "", timestamp).maindeck
                 user_representation = {"name":user["userName"], "picks":picks}
                 user_representations.append(user_representation)
                 number_of_players += 1
@@ -64,26 +149,18 @@ class DraftData:
         self.data = user_representations
         self.number_of_players = number_of_players
 
+    def match_cubes(self, cube_list: CubeList):
+        card_list = [card for player in self.data for card in player.picks]
+        return cube_list.get_matches(card_list)
 
-
-    def parse(self, input_string):
-        """Given an input string, looks at first character to see if it's a draft log or deck,
-        then runs the right fuction to create data.
-        Parameters
-        ----------
-        file : string
-        contents of a file downloaded from discord dump channel
-        """
-
-        if input_string[0] == "{":
-            self.type = 'draft'
-            self.parse_draft(input_string)
-        elif input_string[0] == "D":
-            self.type = 'deck'
-            self.parse_deck(input_string)
-        else:
-            self.type = 'error'
-            raise DraftDataParseError(input_string[0])
+    def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
+        #write the draft seats
+        cell_values = []
+        for user_representation in self.data:
+            cell_values.append([self.timestamp, user_representation["name"]] +
+                               user_representation["picks"])
+        cell_values.append([""])
+        service.write_to_sheet(cell_values, cube.subinfo.draftlog)
 
 class DraftDataParseError(Exception):
     """Raised when a DraftData doesn't recognize the first character of a given input.
@@ -102,9 +179,10 @@ if __name__ == "__main__":
 
     deck_bytes = open(DECK_FILE_PATH, 'rb').read()
     deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
-    deck_data = DraftData(deck, "Deck Submitter", 1)
-    print(deck_data.data)
+    deck_data = DraftData.create(deck, "Deck Submitter", datetime.datetime.now())
+    print(deck_data.maindeck)
+    print(deck_data.timestamp)
     log_bytes = open(LOG_FILE_PATH, 'rb').read()
-    log = log_bytes.decode(chardet.detect(deck_bytes)["encoding"])
-    log_data = DraftData(log, "Log Submitter", 2)
+    log = log_bytes.decode(chardet.detect(log_bytes)["encoding"])
+    log_data = DraftData.create(log, "Log Submitter", datetime.datetime.now())
     print(log_data.data)

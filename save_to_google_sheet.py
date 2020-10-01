@@ -6,7 +6,6 @@ import os.path
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-from draftdata import DraftData
 
 
 class GoogleDraftDataSaver:
@@ -43,53 +42,20 @@ class GoogleDraftDataSaver:
 
         self.service = build('sheets', 'v4', credentials=creds)
 
-    def write_to_sheet(self, data: DraftData):
-        """Given a DraftData, saves the contents of the DraftData
-        to a Google spreadsheet in a manner that matches its data type.
-        If the DraftData's dataType is 'deck', the DraftData's data is
-        a deck's maindeck and sideboard. We will save the maindeck to the Decks sheet,
-        and the sideboard to the Sideboards sheet."""
+    def write_to_sheet(self, cell_data, location):
+        """Saves a 2D array of data to the specified sheet location."""
         sheet = self.service.spreadsheets()
-
-        if data.type == "deck":
-            #write the main deck
-            #placeholders for colors and record
-            deck_metadata = [data.user, "", "", data.timestamp]
-            cell_data = deck_metadata + data.data[0]
-            body = {"values": [cell_data]}
-            sheet.values().append(body=body,
-                                  spreadsheetId=self.spreadsheet_id,
-                                  range="Decks!a1",
-                                  includeValuesInResponse=False,
-                                  valueInputOption="RAW").execute()
-            #write the sideboard
-            #(no placeholders - no need to fill in that info twice)
-            sb_metadata = [data.user, data.timestamp]
-            cell_data = sb_metadata + data.data[1]
-            body = {"values": [cell_data]}
-            sheet.values().append(body=body,
-                                  spreadsheetId=self.spreadsheet_id,
-                                  range="Sideboards!A1",
-                                  includeValuesInResponse=False,
-                                  valueInputOption="RAW").execute()
-
-
-        if data.type == "draft":
-            #write the draft seats
-            cell_values = []
-            for user_representation in data.data:
-                cell_values.append([data.timestamp, user_representation["name"]] + user_representation["picks"])
-            cell_values.append([""])
-            body = {"values": cell_values}
-            sheet.values().append(body=body,
-                                  spreadsheetId=self.spreadsheet_id,
-                                  range="Draft Logs!A1",
-                                  includeValuesInResponse=False,
-                                  valueInputOption="RAW").execute()
+        body = {"values": cell_data}
+        sheet.values().append(body=body,
+                              spreadsheetId=self.spreadsheet_id,
+                              range=location,
+                              includeValuesInResponse=False,
+                              valueInputOption="RAW").execute()
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
     import chardet
+    from draftdata import DraftData
 
     load_dotenv()
     SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
@@ -103,9 +69,9 @@ if __name__ == "__main__":
     deck_bytes = open(DECK_FILE_PATH, 'rb').read()
     deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
     deck_data = DraftData(deck, "Deck Submitter", 1)
-    service.write_to_sheet(deck_data)
+    service.write_to_sheet(deck_data, "Decks!A1")
 
     log_bytes = open(LOG_FILE_PATH, 'rb').read()
     log = log_bytes.decode(chardet.detect(deck_bytes)["encoding"])
     log_data = DraftData(log, "Log Submitter", 2)
-    service.write_to_sheet(log_data)
+    service.write_to_sheet(log_data, "Logs!A1")
