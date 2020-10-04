@@ -50,28 +50,31 @@ async def on_message(msg):
             data = DraftData.create(stream, msg.author.name, msg.created_at)
             candidate_cubes = data.match_cubes(CUBE_LIST)
             if len(candidate_cubes) == 0:
-                await sendDisambiguationRequest(msg.author, CUBE_LIST.keys(), data)
+                await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
             elif len(candidate_cubes) == 1:
                 data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
             else: #len(candidate_cubes) > 1
-                await sendDisambiguationRequest(msg.author, candidate_cubes, data)
+                await send_disambiguation_request(msg.author, candidate_cubes, data)
 
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
 
-async def sendDisambiguationRequest(member: discord.User, candidate_cubes: Sequence[str],
-                                    data: DraftData):
+async def send_disambiguation_request(member: discord.User, candidate_cubes: Sequence[str],
+                                      data: DraftData):
+    """Sends a message to a user asking them to specify which cube their submission belongs to."""
     channel = await member.create_dm()
     emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
     header = "Couldn't determine the cube for your most recent submission. Please " \
              "react to this message with the emoji corresponding to the right cube: \n"
-    cube_reaction_map = {emoji: cubeName for emoji, cubeName in zip(emojis[0:len(candidate_cubes)],candidate_cubes)}
-    content = header + "\n".join([f"\t{emoji}: {cubeName}" for emoji, cubeName in cube_reaction_map.items()])
+    emoji_cube_pairs = zip(emojis[0:len(candidate_cubes)], candidate_cubes)
+    cube_reaction_map = {emoji: cubeName for emoji, cubeName in emoji_cube_pairs}
+    cube_reaction_map_strings = [f"\t{emoji}: {name}" for emoji, name in cube_reaction_map.items()]
+    content = header + "\n".join(cube_reaction_map_strings)
     message = await channel.send(content)
     disambiguation_holding_tank[message.id] = {"cube_reaction_map": cube_reaction_map, "data": data}
 
 @client.event
-async def on_reaction_add(rxn: discord.Reaction, user):
+async def on_reaction_add(rxn: discord.Reaction, user): #pylint: disable=unused-argument
     """handler for a user disambiguating a deck submission
     that could have been from multiple cubes"""
     msg = rxn.message
