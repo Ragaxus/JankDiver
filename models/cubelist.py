@@ -2,15 +2,16 @@
 
 from typing import Sequence
 from collections import UserDict
+from json import JSONEncoder
 
 class CubeSubmissionInfo:
     """The set of spreadsheet locations to which
     to save information about drafts of this cube."""
 
-    def __init__(self, maindeck: str, sideboard: str, draftlogs: str):
+    def __init__(self, maindeck: str, sideboard: str, draftlog: str):
         self.maindeck = maindeck
         self.sideboard = sideboard
-        self.draftlog = draftlogs
+        self.draftlog = draftlog
     @classmethod
     def from_json(cls, data: dict):
         """Given a cubes.json file, creates a new CubeSubmissionInfo object from that json file."""
@@ -19,17 +20,18 @@ class CubeSubmissionInfo:
 class Cube:
     """A list of cards in a cube,
     Along with directions about which speadsheets locations to save to."""
-    def __init__(self, cardList: Sequence[str], subinfo: CubeSubmissionInfo):
+    def __init__(self, cardList: Sequence[str], submission_info: CubeSubmissionInfo):
         self.cards = cardList
-        self.subinfo = subinfo
+        self.submission_info = submission_info
     def contains(self, card_list: Sequence[str]):
         """Does this cube have all the cards in card_list?"""
-        return set(card_list).issubset(set(self.cards))
+        draftable_cards = set(card_list) - set(["Plains", "Island", "Swamp", "Mountain", "Forest"])
+        return draftable_cards.issubset(set(self.cards))
 
     @classmethod
     def from_json(cls, data: dict):
         """Given a cubes.json file, creates a new Cube object from that json file."""
-        return cls(data["cards"], CubeSubmissionInfo.from_json(data["submissionInfo"]))
+        return cls(data["cards"], CubeSubmissionInfo.from_json(data["submission_info"]))
 
 class CubeList(UserDict):
     """A dictionary of cubes organized by name.
@@ -45,6 +47,11 @@ class CubeList(UserDict):
     def from_json(cls, data: dict):
         """Given a cubes.json file, creates a new CubeList object from that json file."""
         return cls({k: Cube.from_json(v) for k, v in data.items()})
+
+class CubeListEncoder(JSONEncoder):
+    """JSON encoder for a CubeList."""
+    def default(self, o):
+        return o.__dict__
 
 if __name__ == "__main__":
     import json

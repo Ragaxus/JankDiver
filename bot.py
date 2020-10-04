@@ -10,7 +10,7 @@ import chardet
 from dotenv import load_dotenv
 import discord
 
-from cubelist import CubeList
+from models.cubelist import CubeList
 from save_to_google_sheet import GoogleDraftDataSaver
 from draftdata import DraftData, DraftDataParseError
 

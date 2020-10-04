@@ -1,11 +1,10 @@
 """class that creates and holds draft data (decks/draft logs) and some properties"""
 
 import re
-import time
 import datetime
 import json
 from save_to_google_sheet import GoogleDraftDataSaver
-from cubelist import CubeList, Cube
+from models.cubelist import CubeList, Cube
 
 
 class DraftData:
@@ -94,22 +93,28 @@ class DeckList(DraftData):
                 card_name = card_regex.match(line).group(1).rstrip().replace("////", "//")
                 add_methods[i](self, card_name)
 
+    def cards_in_deck(self):
+        """Returns a list of all the cards in the deck."""
+        cards_in_deck = self.maindeck + self.sideboard
+        if self.companion:
+            cards_in_deck.append(self.companion)
+        return cards_in_deck
+
     def match_cubes(self, cube_list: CubeList):
-        cards_in_deck = self.maindeck + self.sideboard + [self.companion]
-        return cube_list.get_matches(cards_in_deck)
+        return cube_list.get_matches(self.cards_in_deck())
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
         #write the main deck
         #placeholders for colors and record
         deck_metadata = [self.user, "", "", self.timestamp]
         cell_data = deck_metadata + [self.companion] + self.maindeck
-        service.write_to_sheet([cell_data], cube.subinfo.maindeck)
+        service.write_to_sheet([cell_data], cube.submission_info.maindeck)
 
         #write the sideboard
         #(no placeholders - no need to fill in that info twice)
         sb_metadata = [self.user, self.timestamp]
         cell_data = sb_metadata + self.sideboard
-        service.write_to_sheet([cell_data], cube.subinfo.sideboard)
+        service.write_to_sheet([cell_data], cube.submission_info.sideboard)
 
 class DraftLog(DraftData):
     """A parsed draft log from a file submitted in the Discord channel."""
@@ -150,7 +155,7 @@ class DraftLog(DraftData):
         self.number_of_players = number_of_players
 
     def match_cubes(self, cube_list: CubeList):
-        card_list = [card for player in self.data for card in player.picks]
+        card_list = [card for player in self.data for card in player["picks"]]
         return cube_list.get_matches(card_list)
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
@@ -160,7 +165,7 @@ class DraftLog(DraftData):
             cell_values.append([self.timestamp, user_representation["name"]] +
                                user_representation["picks"])
         cell_values.append([""])
-        service.write_to_sheet(cell_values, cube.subinfo.draftlog)
+        service.write_to_sheet(cell_values, cube.submission_info.draftlog)
 
 class DraftDataParseError(Exception):
     """Raised when a DraftData doesn't recognize the first character of a given input.
@@ -180,9 +185,9 @@ if __name__ == "__main__":
     deck_bytes = open(DECK_FILE_PATH, 'rb').read()
     deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
     deck_data = DraftData.create(deck, "Deck Submitter", datetime.datetime.now())
-    print(deck_data.maindeck)
+    print(deck_data.cards_in_deck())
     print(deck_data.timestamp)
     log_bytes = open(LOG_FILE_PATH, 'rb').read()
     log = log_bytes.decode(chardet.detect(log_bytes)["encoding"])
     log_data = DraftData.create(log, "Log Submitter", datetime.datetime.now())
-    print(log_data.data)
+    #print(log_data.data)
