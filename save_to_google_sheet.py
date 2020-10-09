@@ -41,6 +41,8 @@ class GoogleDraftDataSaver:
 
     def write_to_sheet(self, cell_data, spreadsheet_id, location):
         """Saves a 2D array of data to the specified sheet location."""
+        if not spreadsheet_id or not location:
+            return
         sheet = self.service.spreadsheets()
         body = {"values": cell_data}
         sheet.values().append(body=body,
