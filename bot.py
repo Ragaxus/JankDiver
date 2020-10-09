@@ -12,7 +12,7 @@ import discord
 
 from models.cubelist import CubeList
 from save_to_google_sheet import GoogleDraftDataSaver
-from draftdata import DraftData, DraftDataParseError
+from draftdata import DraftData, DeckList, DraftDataParseError
 
 CUBE_LIST = None
 try:
@@ -47,6 +47,9 @@ async def on_message(msg):
             file_of_message = await msg.attachments[0].read()
             stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
             data = DraftData.create(stream, msg.author.name, msg.created_at)
+            if (isinstance(data, DeckList) and data.commander):
+                await send_commander_admonishment(msg.author)
+                return
             candidate_cubes = data.match_cubes(CUBE_LIST)
             if len(candidate_cubes) == 0:
                 await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
@@ -57,6 +60,18 @@ async def on_message(msg):
 
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
+
+async def send_commander_admonishment(member: discord.User):
+    """We don't take kindly to your type around here."""
+    content = "I can't help but notice that your most recent submission to the deck submission "\
+              "channel was a deck that has a commander in it. None of our cubes are meant "\
+              "for Commander play, so I don't understand why you'd submit a deck with "\
+              "a commander to the deck submission channel. "\
+              "\n\n"\
+              "(If you feel you're receiving this message in error, please alert a server admin.)"
+    channel = await member.create_dm()
+    await channel.send(content)
+
 
 async def send_disambiguation_request(member: discord.User, candidate_cubes: Sequence[str],
                                       data: DraftData):
