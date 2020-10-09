@@ -54,6 +54,7 @@ class DeckList(DraftData):
         self.maindeck = []
         self.sideboard = []
         self.companion = ""
+        self.commander = ""
         self.parse(data_stream)
 
     def parse(self, data: str):
@@ -70,16 +71,20 @@ class DeckList(DraftData):
             self.maindeck.append(card_name)
 
         def add_card_to_sideboard(self, card_name):
-            if card_name != self.companion:
+            if (card_name != self.companion) and (card_name != self.commander):
                 self.sideboard.append(card_name)
 
         def add_card_as_companion(self, card_name):
             self.companion = card_name
 
+        def add_card_as_commander(self, card_name):
+            self.commander = card_name
+
         add_methods = {
             0: add_card_to_maindeck,
             1: add_card_to_sideboard,
-            2: add_card_as_companion
+            2: add_card_as_companion,
+            3: add_card_as_commander
         }
 
         for line in [l.rstrip() for l in data.split('\n')]:
@@ -89,6 +94,8 @@ class DeckList(DraftData):
                 i = 1
             elif line == "Companion":
                 i = 2
+            elif line == "Commander":
+                i = 3
             elif line.startswith('1 '):
                 card_name = card_regex.match(line).group(1).rstrip().replace("////", "//")
                 add_methods[i](self, card_name)
@@ -98,23 +105,30 @@ class DeckList(DraftData):
         cards_in_deck = self.maindeck + self.sideboard
         if self.companion:
             cards_in_deck.append(self.companion)
+        if self.commander:
+            cards_in_deck.append(self.commander)
         return cards_in_deck
 
     def match_cubes(self, cube_list: CubeList):
         return cube_list.get_matches(self.cards_in_deck())
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
-        #write the main deck
-        #placeholders for colors and record
-        deck_metadata = [self.user, "", "", self.timestamp]
-        cell_data = deck_metadata + [self.companion] + self.maindeck
-        service.write_to_sheet([cell_data], cube.submission_info.maindeck)
+        # maindeck
+        # placeholders for colors and record
+        # Leaving commanders out for now since no cube that we manage uses them
+        deck_metadata = [self.user, "", "", self.companion, self.timestamp]
+        cell_data = deck_metadata + self.maindeck
+        service.write_to_sheet([cell_data],
+                               cube.submission_info.spreadsheet_id,
+                               cube.submission_info.maindeck)
 
-        #write the sideboard
+        #sideboard
         #(no placeholders - no need to fill in that info twice)
         sb_metadata = [self.user, self.timestamp]
         cell_data = sb_metadata + self.sideboard
-        service.write_to_sheet([cell_data], cube.submission_info.sideboard)
+        service.write_to_sheet([cell_data],
+                               cube.submission_info.spreadsheet_id,
+                               cube.submission_info.sideboard)
 
 class DraftLog(DraftData):
     """A parsed draft log from a file submitted in the Discord channel."""
@@ -165,7 +179,9 @@ class DraftLog(DraftData):
             cell_values.append([self.timestamp, user_representation["name"]] +
                                user_representation["picks"])
         cell_values.append([""])
-        service.write_to_sheet(cell_values, cube.submission_info.draftlog)
+        service.write_to_sheet(cell_values,
+                               cube.submission_info.spreadsheet_id,
+                               cube.submission_info.draftlog)
 
 class DraftDataParseError(Exception):
     """Raised when a DraftData doesn't recognize the first character of a given input.

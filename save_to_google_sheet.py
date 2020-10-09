@@ -14,13 +14,10 @@ class GoogleDraftDataSaver:
     # If modifying these scopes, delete the file token.pickle.
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-    def __init__(self, spreadsheetId):
+    def __init__(self):
         """Logs into the Google API app. Returns a service object that will let us interact
         with the spreadsheet.
         """
-
-        self.spreadsheet_id = spreadsheetId
-
         creds = None
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
@@ -42,36 +39,12 @@ class GoogleDraftDataSaver:
 
         self.service = build('sheets', 'v4', credentials=creds)
 
-    def write_to_sheet(self, cell_data, location):
+    def write_to_sheet(self, cell_data, spreadsheet_id, location):
         """Saves a 2D array of data to the specified sheet location."""
         sheet = self.service.spreadsheets()
         body = {"values": cell_data}
         sheet.values().append(body=body,
-                              spreadsheetId=self.spreadsheet_id,
+                              spreadsheetId=spreadsheet_id,
                               range=location,
                               includeValuesInResponse=False,
                               valueInputOption="RAW").execute()
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import chardet
-    from draftdata import DraftData
-
-    load_dotenv()
-    SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
-
-    # Call the Sheets API
-    service = GoogleDraftDataSaver(SPREADSHEET_ID)
-
-    DECK_FILE_PATH = r"C:\Users\sgold\Documents\Arena Cube Drafts\take_me_to_church.txt"
-    LOG_FILE_PATH = r"C:\Users\sgold\Downloads\DraftLog_APCd.txt"
-
-    deck_bytes = open(DECK_FILE_PATH, 'rb').read()
-    deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
-    deck_data = DraftData(deck, "Deck Submitter", 1)
-    service.write_to_sheet(deck_data, "Decks!A1")
-
-    log_bytes = open(LOG_FILE_PATH, 'rb').read()
-    log = log_bytes.decode(chardet.detect(deck_bytes)["encoding"])
-    log_data = DraftData(log, "Log Submitter", 2)
-    service.write_to_sheet(log_data, "Logs!A1")

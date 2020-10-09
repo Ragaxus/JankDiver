@@ -8,7 +8,8 @@ class CubeSubmissionInfo:
     """The set of spreadsheet locations to which
     to save information about drafts of this cube."""
 
-    def __init__(self, maindeck: str, sideboard: str, draftlog: str):
+    def __init__(self, spreadsheet_id: str, maindeck: str, sideboard: str, draftlog: str):
+        self.spreadsheet_id = spreadsheet_id
         self.maindeck = maindeck
         self.sideboard = sideboard
         self.draftlog = draftlog
@@ -59,3 +60,5 @@ if __name__ == "__main__":
     with open("config/cubes.json", 'r') as cubes_file:
         CUBE_LIST = CubeList.from_json(json.load(cubes_file))
     print(CUBE_LIST.get_matches(["Shock"]))
+    print(CUBE_LIST.get_matches(["Imperial Aerosaur"]))
+    

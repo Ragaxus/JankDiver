@@ -25,9 +25,8 @@ except FileNotFoundError as ex:
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 CHANNEL = os.getenv('CHANNEL')
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 
-service = GoogleDraftDataSaver(SPREADSHEET_ID)
+service = GoogleDraftDataSaver()
 disambiguation_holding_tank = {}
 client = discord.Client()
 
