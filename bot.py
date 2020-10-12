@@ -3,8 +3,10 @@ attachment, the bot assumes that attachment is a deck, and saves that deck to a 
 Google spreadsheet."""
 
 import os
+import re
 import json
 from typing import Sequence
+from datetime import datetime
 
 import chardet
 from dotenv import load_dotenv
@@ -44,9 +46,36 @@ async def on_message(msg):
     if msg.channel.name == CHANNEL and len(msg.attachments) > 0:
         #read the msg, put it into a stream for consumption
         try:
+            # Look for user submitted deck record from the message.
+            record_regex = re.compile(r'\b[0-3]-[0-3]\b')
+            record_match = record_regex.search(msg.content)
+            if record_match:
+                wins = int(msg.content[record_match.start()])
+            else:
+                wins = ""
+            # Look for user submitted date from the message.
+            # YYYY/MM/DD
+            YMD_regex = re.compile(
+                r'\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b')
+            HM_regex = re.compile(
+                r'\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b')
+            YMD_match = YMD_regex.search(msg.content)
+            HM_match = HM_regex.search(msg.content)
+            if YMD_match:
+                date = datetime(year = int(YMD_match.group("year")),
+                    month = int(YMD_match.group("month")),
+                    day = int(YMD_match.group("day")))
+            else:
+                date = msg.created_at
+            if HM_match:
+                date = date.replace(
+                    hour = int(msg.content[HM_match.start():HM_match.start()+2]),
+                    minute = int(msg.content[HM_match.end()-2:HM_match.end()]))
+
+
             file_of_message = await msg.attachments[0].read()
             stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
-            data = DraftData.create(stream, msg.author.name, msg.created_at)
+            data = DraftData.create(stream, msg.author.name, date, wins)
             if (isinstance(data, DeckList) and data.commander):
                 await send_commander_admonishment(msg.author)
                 return
