@@ -6,3 +6,7 @@
 /token.pickle
 /__pycache__
 /config/*.*
+data*
+__pycache__
+*/__pycache__
+Data
