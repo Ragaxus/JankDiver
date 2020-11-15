@@ -42,24 +42,37 @@ async def on_message(msg):
     if msg.channel.type != discord.ChannelType.text:
         return
     if msg.channel.name == CHANNEL and len(msg.attachments) > 0:
-        #read the msg, put it into a stream for consumption
         try:
-            file_of_message = await msg.attachments[0].read()
-            stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
-            data = DraftData.create(stream, msg.author.name, msg.created_at)
-            if (isinstance(data, DeckList) and data.commander):
-                await send_commander_admonishment(msg.author)
-                return
-            candidate_cubes = data.match_cubes(CUBE_LIST)
-            if len(candidate_cubes) == 0:
-                await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
-            elif len(candidate_cubes) == 1:
-                data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
-            else: #len(candidate_cubes) > 1
-                await send_disambiguation_request(msg.author, candidate_cubes, data)
-
+            parse_submission(msg)
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
+
+async def parse_submission(msg):
+    attachment = msg.attachments[0]
+    if not attachment.size > 0:
+        await send_empty_file_alert(msg.author, attachment.filename)
+        return
+    file_of_message = await attachment.read()
+    stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
+    data = DraftData.create(stream, msg.author.name, msg.created_at)
+    if (isinstance(data, DeckList) and data.commander):
+        await send_commander_admonishment(msg.author)
+        return
+    candidate_cubes = data.match_cubes(CUBE_LIST)
+    if len(candidate_cubes) == 0:
+        await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
+    elif len(candidate_cubes) == 1:
+        data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
+    else: #len(candidate_cubes) > 1
+        await send_disambiguation_request(msg.author, candidate_cubes, data)
+
+async def send_empty_file_alert(member: discord.User, attachment_name: str):
+    """Alerts submitter that their file was empty."""
+    content = f"The file you most recently submitted, {attachment_name}, is empty!" \
+              "\n\n"\
+              "(If you feel you're receiving this message in error, please alert a server admin.)"
+    channel = await member.create_dm()
+    await channel.send(content)
 
 async def send_commander_admonishment(member: discord.User):
     """We don't take kindly to your type around here."""

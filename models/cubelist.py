@@ -1,4 +1,5 @@
 """Data model for Cubes, including the data about where in the spreadsheet to save them."""
+import os
 
 from typing import Sequence
 from collections import UserDict
@@ -21,18 +22,24 @@ class CubeSubmissionInfo:
 class Cube:
     """A list of cards in a cube,
     Along with directions about which speadsheets locations to save to."""
-    def __init__(self, cardList: Sequence[str], submission_info: CubeSubmissionInfo):
-        self.cards = cardList
+    def __init__(self, cardList: Sequence[str], cube_cobra_id: str,
+                 submission_info: CubeSubmissionInfo):
+        self.cards = set(cardList)
+        self.cube_cobra_id = cube_cobra_id
         self.submission_info = submission_info
     def contains(self, card_list: Sequence[str]):
         """Does this cube have all the cards in card_list?"""
         draftable_cards = set(card_list) - set(["Plains", "Island", "Swamp", "Mountain", "Forest"])
-        return draftable_cards.issubset(set(self.cards))
+        does_contain = draftable_cards.issubset(self.cards)
+        if os.getenv("DEBUG") and not does_contain:
+            print(draftable_cards - self.cards)
+        return does_contain
 
     @classmethod
     def from_json(cls, data: dict):
         """Given a cubes.json file, creates a new Cube object from that json file."""
-        return cls(data["cards"], CubeSubmissionInfo.from_json(data["submission_info"]))
+        return cls(data["cards"], data["cube_cobra_id"],
+                   CubeSubmissionInfo.from_json(data["submission_info"]))
 
 class CubeList(UserDict):
     """A dictionary of cubes organized by name.
@@ -52,6 +59,8 @@ class CubeList(UserDict):
 class CubeListEncoder(JSONEncoder):
     """JSON encoder for a CubeList."""
     def default(self, o):
+        if isinstance(o, set):
+            return list(o)
         return o.__dict__
 
 if __name__ == "__main__":
@@ -60,5 +69,5 @@ if __name__ == "__main__":
     with open("config/cubes.json", 'r') as cubes_file:
         CUBE_LIST = CubeList.from_json(json.load(cubes_file))
     print(CUBE_LIST.get_matches(["Shock"]))
-    print(CUBE_LIST.get_matches(["Imperial Aerosaur"]))
+    print(CUBE_LIST.get_matches(["Visionary Augmenter"]))
     

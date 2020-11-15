@@ -32,15 +32,23 @@ class DraftData:
         """Sets the timestamps for the draft data using a standard format."""
         self.timestamp = timestamp.strftime('%Y-%m-%d %H:%M')
 
+    def match_cubes(self, cube_list: CubeList):
+        """Given a list of known cubes, returns a list of cubes that contain
+        all of the cards in this DraftData."""
+        card_list = self.card_list()
+        return cube_list.get_matches(card_list)
+
     #Abstract class method stubs -- don't change these
     def parse(self, data: str):
-        """Abstract class method stub"""
+        """Given the contents of a submission file, reads the file into
+        a discrete data object."""
         raise NotImplementedError
-    def match_cubes(self, cube_list: CubeList):
-        """Abstract class method stub"""
+    def card_list(self):
+        """Returns a list of all the card names present in the data for this object."""
         raise NotImplementedError
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
-        """Abstract class method stub"""
+        """Writes the contents of the DraftData to the appropriate sheet location
+        for a given Cube."""
         raise NotImplementedError
 
 class DeckList(DraftData):
@@ -100,7 +108,7 @@ class DeckList(DraftData):
                 card_name = card_regex.match(line).group(1).rstrip().replace("////", "//")
                 add_methods[i](self, card_name)
 
-    def cards_in_deck(self):
+    def card_list(self):
         """Returns a list of all the cards in the deck."""
         cards_in_deck = self.maindeck + self.sideboard
         if self.companion:
@@ -108,9 +116,6 @@ class DeckList(DraftData):
         if self.commander:
             cards_in_deck.append(self.commander)
         return cards_in_deck
-
-    def match_cubes(self, cube_list: CubeList):
-        return cube_list.get_matches(self.cards_in_deck())
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
         # maindeck
@@ -168,9 +173,8 @@ class DraftLog(DraftData):
         self.data = user_representations
         self.number_of_players = number_of_players
 
-    def match_cubes(self, cube_list: CubeList):
-        card_list = [card for player in self.data for card in player["picks"]]
-        return cube_list.get_matches(card_list)
+    def card_list(self):
+        return [card for player in self.data for card in player["picks"]]
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
         #write the draft seats
@@ -201,7 +205,7 @@ if __name__ == "__main__":
     deck_bytes = open(DECK_FILE_PATH, 'rb').read()
     deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
     deck_data = DraftData.create(deck, "Deck Submitter", datetime.datetime.now())
-    print(deck_data.cards_in_deck())
+    print(deck_data.card_list())
     print(deck_data.timestamp)
     log_bytes = open(LOG_FILE_PATH, 'rb').read()
     log = log_bytes.decode(chardet.detect(log_bytes)["encoding"])
