@@ -43,7 +43,7 @@ async def on_message(msg):
         return
     if msg.channel.name == CHANNEL and len(msg.attachments) > 0:
         try:
-            parse_submission(msg)
+            await parse_submission(msg)
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
 
