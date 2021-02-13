@@ -105,7 +105,7 @@ class DeckList(DraftData):
             elif line == "Commander":
                 i = 3
             elif line.startswith('1 '):
-                card_name = card_regex.match(line).group(1).rstrip().replace("////", "//")
+                card_name = card_regex.match(line).group(1).rstrip().replace("////","//").replace("///", "//")
                 add_methods[i](self, card_name)
 
     def card_list(self):
