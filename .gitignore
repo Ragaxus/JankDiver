@@ -4,9 +4,9 @@
 /.vscode
 /credentials.json
 /token.pickle
-/__pycache__
+/__pycache__*
 /config/*.*
 data*
-__pycache__
 */__pycache__
+__pycache__*
 Data
