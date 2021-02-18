@@ -44,51 +44,63 @@ async def on_message(msg):
     if msg.channel.type != discord.ChannelType.text:
         return
     if msg.channel.name == CHANNEL and len(msg.attachments) > 0:
-        #read the msg, put it into a stream for consumption
         try:
-            # Look for user submitted deck record from the message.
-            record_regex = re.compile(r'\b[0-3]-[0-3]\b')
-            record_match = record_regex.search(msg.content)
-            if record_match:
-                wins = int(msg.content[record_match.start()])
-            else:
-                wins = ""
-            # Look for user submitted date from the message.
-            # YYYY/MM/DD
-            YMD_regex = re.compile(
-                r'\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b')
-            HM_regex = re.compile(
-                r'\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b')
-            YMD_match = YMD_regex.search(msg.content)
-            HM_match = HM_regex.search(msg.content)
-            if YMD_match:
-                date = datetime(year = int(YMD_match.group("year")),
-                    month = int(YMD_match.group("month")),
-                    day = int(YMD_match.group("day")))
-            else:
-                date = msg.created_at
-            if HM_match:
-                date = date.replace(
-                    hour = int(msg.content[HM_match.start():HM_match.start()+2]),
-                    minute = int(msg.content[HM_match.end()-2:HM_match.end()]))
-
-
-            file_of_message = await msg.attachments[0].read()
-            stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
-            data = DraftData.create(stream, msg.author.name, date, wins)
-            if (isinstance(data, DeckList) and data.commander):
-                await send_commander_admonishment(msg.author)
-                return
-            candidate_cubes = data.match_cubes(CUBE_LIST)
-            if len(candidate_cubes) == 0:
-                await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
-            elif len(candidate_cubes) == 1:
-                data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
-            else: #len(candidate_cubes) > 1
-                await send_disambiguation_request(msg.author, candidate_cubes, data)
-
+            await parse_submission(msg)
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
+
+async def parse_submission(msg):
+    # Look for user submitted win-loss record from the message.
+    record_regex = re.compile(r'\b[0-3]-[0-3]\b')
+    record_match = record_regex.search(msg.content)
+    if record_match:
+        wins = int(msg.content[record_match.start()])
+    else:
+        wins = ""
+    # Look for user submitted date from the message.
+    # YYYY/MM/DD
+    YMD_regex = re.compile(
+        r'\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b')
+    HM_regex = re.compile(
+        r'\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b')
+    YMD_match = YMD_regex.search(msg.content)
+    HM_match = HM_regex.search(msg.content)
+    if YMD_match:
+        date = datetime(year = int(YMD_match.group("year")),
+            month = int(YMD_match.group("month")),
+            day = int(YMD_match.group("day")))
+    else:
+        date = msg.created_at
+    if HM_match:
+        date = date.replace(
+            hour = int(msg.content[HM_match.start():HM_match.start()+2]),
+            minute = int(msg.content[HM_match.end()-2:HM_match.end()]))
+
+    attachment = msg.attachments[0]
+    if not attachment.size > 0:
+        await send_empty_file_alert(msg.author, attachment.filename)
+        return
+    file_of_message = await attachment.read()
+    stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
+    data = DraftData.create(stream, msg.author.name, msg.created_at)
+    if (isinstance(data, DeckList) and data.commander):
+        await send_commander_admonishment(msg.author)
+        return
+    candidate_cubes = data.match_cubes(CUBE_LIST)
+    if len(candidate_cubes) == 0:
+        await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
+    elif len(candidate_cubes) == 1:
+        data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
+    else: #len(candidate_cubes) > 1
+        await send_disambiguation_request(msg.author, candidate_cubes, data)
+
+async def send_empty_file_alert(member: discord.User, attachment_name: str):
+    """Alerts submitter that their file was empty."""
+    content = f"The file you most recently submitted, {attachment_name}, is empty!" \
+              "\n\n"\
+              "(If you feel you're receiving this message in error, please alert a server admin.)"
+    channel = await member.create_dm()
+    await channel.send(content)
 
 async def send_commander_admonishment(member: discord.User):
     """We don't take kindly to your type around here."""
