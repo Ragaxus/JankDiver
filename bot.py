@@ -53,25 +53,20 @@ async def on_message(msg):
 
 
 async def parse_submission(msg):
-    """Look for the following user submitted parameters:
-    1. Win-loss record  Format: W-L         Default : ""
-    2. Date             Format: YYYY-MM-DD  Default msg.created_at
-    3. Time             Format: HH:MM       Default: msg.created_at
-    """
+    # Regex for Win-Loss YYYY-MM-DD HH:MM
     msg_re = re.compile(
-        r'(?:\b(?P<wins>[0-3])-[0-3]\b(?:\s)?)?(?#Record)'
+        r'(?:\b(?P<wins>[0-3])-[0-3]\b)?(?:\s)?'
         r'(?:\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b)?'
-        r'(?:[\s])?(?:(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b)?'
+        r'(?:\s)?(?:\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b)?'
         )
-    msg_params = msg_re.search(msg.content).groupdict("")
-    wins = msg_params["wins"]
-    if wins:
-        wins = int(wins)  # if wins are submitted change the value to integer.
+    # Assign the parameters found.
+    msg_params = msg_re.search(msg.content).groupdict(default="")
+    wins = msg_params.pop("wins")
+    if wins != "":
+        wins = int(wins)
     date = msg.created_at
-    date = date.replace(**{
-        key: int(val) for key, val in msg_params if (bool(val) & (key != "wins"))
-        })
-
+    date = date.replace(**{key: int(val) for key, val in msg_params if val != ""})
+    # Handle attached file.
     attachment = msg.attachments[0]
     if not attachment.size > 0:
         await send_empty_file_alert(msg.author, attachment.filename)
