@@ -55,9 +55,11 @@ async def on_message(msg):
 async def parse_submission(msg):
     # Regex for Win-Loss YYYY-MM-DD HH:MM
     msg_re = re.compile(
-        r'(?:\b(?P<wins>[0-3])-[0-3]\b)?(?:\s)?'
-        r'(?:\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b)?'
-        r'(?:\s)?(?:\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b)?'
+        r'(.*\b(?P<wins>\d+)-\d+\b)?'
+        r'\s?'
+        r'(\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b)?'
+        r'\s?'
+        r'(\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b)?'
         )
     # Assign the parameters found.
     msg_params = msg_re.search(msg.content).groupdict(default="")
