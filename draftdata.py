@@ -10,7 +10,7 @@ from models.cubelist import CubeList, Cube
 class DraftData:
     """A parsed file from the #txt channel - either a deck, or a draft log."""
     @staticmethod
-    def create(input_string, user, timestamp):
+    def create(input_string, user, timestamp, wins=""):
         """Given an input string, looks at first character to see if it's a draft log or deck,
         then returns the proper implementer of DraftData
         Parameters
@@ -19,7 +19,7 @@ class DraftData:
         contents of a file downloaded from discord dump channel
         """
         if input_string[0] in ["C", "D"]: #To account for companions
-            return DeckList(input_string, user, timestamp)
+            return DeckList(input_string, user, timestamp, wins)
         elif input_string[0] == "{":
             return DraftLog(input_string, user)
         else:
@@ -53,11 +53,12 @@ class DraftData:
 
 class DeckList(DraftData):
     """A parsed deck from a file submitted in the Discord channel."""
-    def __init__(self, data_stream, user, timestamp):
+    def __init__(self, data_stream, user, timestamp, wins=""):
         super().__init__()
 
         self.user = user
         self.set_timestamp(timestamp)
+        self.wins = wins
 
         self.maindeck = []
         self.sideboard = []
@@ -106,7 +107,9 @@ class DeckList(DraftData):
                 i = 3
             elif line.startswith('1 '):
                 card_name = card_regex.match(line).group(1).rstrip().replace("////","//").replace("///", "//")
-                add_methods[i](self, card_name)
+                # Should the basics be dropped?
+                if card_name not in ["Island", "Plains", "Swamp", "Mountain", "Forest"]:
+                    add_methods[i](self, card_name)
 
     def card_list(self):
         """Returns a list of all the cards in the deck."""
@@ -118,10 +121,11 @@ class DeckList(DraftData):
         return cards_in_deck
 
     def save_to_spreadsheet(self, service: GoogleDraftDataSaver, cube: Cube):
+        # write the main deck
         # maindeck
-        # placeholders for colors and record
+        # placeholders for colors
         # Leaving commanders out for now since no cube that we manage uses them
-        deck_metadata = [self.user, "", "", self.companion, self.timestamp]
+        deck_metadata = [self.user, self.wins, "", self.companion, self.timestamp]
         cell_data = deck_metadata + self.maindeck
         service.write_to_sheet([cell_data],
                                cube.submission_info.spreadsheet_id,
@@ -201,6 +205,8 @@ if __name__ == "__main__":
 
     DECK_FILE_PATH = r"C:\Users\sgold\Documents\Arena Cube Drafts\take_me_to_church.txt"
     LOG_FILE_PATH = r"C:\Users\sgold\Downloads\DraftLog_APCd.txt"
+
+
 
     deck_bytes = open(DECK_FILE_PATH, 'rb').read()
     deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])

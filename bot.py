@@ -3,8 +3,10 @@ attachment, the bot assumes that attachment is a deck, and saves that deck to a 
 Google spreadsheet."""
 
 import os
+import re
 import json
 from typing import Sequence
+from datetime import datetime
 
 import chardet
 from dotenv import load_dotenv
@@ -30,15 +32,17 @@ service = GoogleDraftDataSaver()
 disambiguation_holding_tank = {}
 client = discord.Client()
 
+
 @client.event
 async def on_ready():
     """The function that handles the 'bot is connected' event."""
     print(f'{client.user} has connected to Discord!')
 
+
 @client.event
 async def on_message(msg):
     """The function that handles the 'a message was posted' event."""
-    #main channel processing -- handles users posting decklists
+    # main channel processing -- handles users posting decklists
     if msg.channel.type != discord.ChannelType.text:
         return
     if msg.channel.name == CHANNEL and len(msg.attachments) > 0:
@@ -47,14 +51,31 @@ async def on_message(msg):
         except DraftDataParseError as ex:
             await msg.channel.send(ex.message)
 
+
 async def parse_submission(msg):
+    # Regex for Win-Loss YYYY-MM-DD HH:MM
+    msg_re = re.compile(
+        r'(.*\b(?P<wins>\d+)-\d+\b)?'
+        r'\s?'
+        r'(\b(?P<year>[0-9]{4})-(?P<month>1[0-2]|0[0-9])-(?P<day>0[1-9]|[1-2][0-9]|3[0-1])\b)?'
+        r'\s?'
+        r'(\b(?P<hour>[0-1][0-9]|2[0-4]):(?P<minute>[0-5][0-9])\b)?'
+        )
+    # Assign the parameters found.
+    msg_params = msg_re.search(msg.content).groupdict(default="")
+    wins = msg_params.pop("wins")
+    if wins != "":
+        wins = int(wins)
+    date = msg.created_at
+    date = date.replace(**{key: int(val) for key, val in msg_params if val != ""})
+    # Handle attached file.
     attachment = msg.attachments[0]
     if not attachment.size > 0:
         await send_empty_file_alert(msg.author, attachment.filename)
         return
     file_of_message = await attachment.read()
     stream = file_of_message.decode(chardet.detect(file_of_message)["encoding"])
-    data = DraftData.create(stream, msg.author.name, msg.created_at)
+    data = DraftData.create(stream, msg.author.name, date, wins)
     if (isinstance(data, DeckList) and data.commander):
         await send_commander_admonishment(msg.author)
         return
@@ -63,8 +84,9 @@ async def parse_submission(msg):
         await send_disambiguation_request(msg.author, CUBE_LIST.keys(), data)
     elif len(candidate_cubes) == 1:
         data.save_to_spreadsheet(service, CUBE_LIST[candidate_cubes[0]])
-    else: #len(candidate_cubes) > 1
+    else:  # len(candidate_cubes) > 1
         await send_disambiguation_request(msg.author, candidate_cubes, data)
+
 
 async def send_empty_file_alert(member: discord.User, attachment_name: str):
     """Alerts submitter that their file was empty."""
@@ -73,6 +95,7 @@ async def send_empty_file_alert(member: discord.User, attachment_name: str):
               "(If you feel you're receiving this message in error, please alert a server admin.)"
     channel = await member.create_dm()
     await channel.send(content)
+
 
 async def send_commander_admonishment(member: discord.User):
     """We don't take kindly to your type around here."""
@@ -100,8 +123,9 @@ async def send_disambiguation_request(member: discord.User, candidate_cubes: Seq
     message = await channel.send(content)
     disambiguation_holding_tank[message.id] = {"cube_reaction_map": cube_reaction_map, "data": data}
 
+
 @client.event
-async def on_reaction_add(rxn: discord.Reaction, user): #pylint: disable=unused-argument
+async def on_reaction_add(rxn: discord.Reaction, user):  # pylint: disable=unused-argument
     """handler for a user disambiguating a deck submission
     that could have been from multiple cubes"""
     msg = rxn.message
