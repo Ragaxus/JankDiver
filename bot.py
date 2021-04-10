@@ -67,7 +67,7 @@ async def parse_submission(msg):
     if wins != "":
         wins = int(wins)
     date = msg.created_at
-    date = date.replace(**{key: int(val) for key, val in msg_params if val != ""})
+    date = date.replace(**{key: int(val) for key, val in msg_params.items() if val != ""})
     # Handle attached file.
     attachment = msg.attachments[0]
     if not attachment.size > 0:
