@@ -125,16 +125,18 @@ async def send_disambiguation_request(member: discord.User, candidate_cubes: Seq
 
 
 @client.event
-async def on_reaction_add(rxn: discord.Reaction, user):  # pylint: disable=unused-argument
+async def on_raw_reaction_add(payload):  # pylint: disable=unused-argument
     """handler for a user disambiguating a deck submission
     that could have been from multiple cubes"""
-    msg = rxn.message
+    channel = client.get_channel(payload.channel_id)
+    msg = await channel.fetch_message(payload.message_id)
+    emoji = payload.emoji.name #This is the unicode codepoint of the emoji
     if msg.channel.type == discord.ChannelType.private:
         if msg.id in disambiguation_holding_tank:
             disambiguation_data = disambiguation_holding_tank[msg.id]
             cube_reaction_map = disambiguation_data["cube_reaction_map"]
-            if rxn.emoji in cube_reaction_map:
-                correct_cube = CUBE_LIST[cube_reaction_map[rxn.emoji]]
+            if emoji in cube_reaction_map:
+                correct_cube = CUBE_LIST[cube_reaction_map[emoji]]
                 data = disambiguation_data["data"]
                 data.save_to_spreadsheet(service, correct_cube)
                 await msg.delete()

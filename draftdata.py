@@ -19,7 +19,7 @@ class DraftData:
         contents of a file downloaded from discord dump channel
         """
         if input_string[0] in ["C", "D"]: #To account for companions
-            return DeckList(input_string, user, timestamp, wins)
+            return DeckList(user, timestamp, wins=wins, data_stream=input_string)
         elif input_string[0] == "{":
             return DraftLog(input_string, user)
         else:
@@ -53,18 +53,26 @@ class DraftData:
 
 class DeckList(DraftData):
     """A parsed deck from a file submitted in the Discord channel."""
-    def __init__(self, data_stream, user, timestamp, wins=""):
+    def __init__(self, user, timestamp, wins="", **deck_info):
         super().__init__()
 
         self.user = user
         self.set_timestamp(timestamp)
         self.wins = wins
-
-        self.maindeck = []
-        self.sideboard = []
-        self.companion = ""
+        self.maindeck = [] 
+        self.sideboard = [] 
+        self.companion = "" 
         self.commander = ""
-        self.parse(data_stream)
+        
+        data_stream = deck_info.get('data_stream', None)
+        if data_stream:
+            self.parse(data_stream)
+        else:
+            self.maindeck = deck_info.get('maindeck',[])
+            self.sideboard = deck_info.get('sideboard',[])
+            self.companion = deck_info.get('companion',"")
+            self.commander = deck_info.get('commander',"")
+        
 
     def parse(self, data: str):
         """Given a deck as a string, returns a list of card names in the maindeck.
@@ -146,7 +154,8 @@ class DraftLog(DraftData):
         self.user = user     #holds the user from whom the data was scraped
         self.data = ""       #holds the parsed data
         self.number_of_players = 0
-
+        self.deck_lists = []
+        self.card_data = {}
         self.parse(data_stream)
 
     def parse(self, data: str):
@@ -158,6 +167,8 @@ class DraftLog(DraftData):
         """
         draft_log = json.loads(data)
 
+        self.card_data = draft_log["carddata"]
+
         timestamp = datetime.datetime.fromtimestamp(int(draft_log["time"])*.001)
         self.set_timestamp(timestamp)
 
@@ -166,10 +177,15 @@ class DraftLog(DraftData):
         for _, user in draft_log["users"].items():
             try:
                 name = user["userName"]
-                picks = DeckList(user["exportString"], "", timestamp).maindeck
+                picks = DeckList(name, timestamp, data_stream=user["exportString"]).maindeck
                 user_representation = {"name":user["userName"], "picks":picks}
                 user_representations.append(user_representation)
                 number_of_players += 1
+                if "decklist" in user:
+                    maindeck = [self.card_data[key]["name"] for key in user["decklist"]["main"]]
+                    if "side" in user["decklist"]:
+                        sideboard = [self.card_data[key]["name"] for key in user["decklist"]["side"]]
+                    self.deck_lists.append(DeckList(name, timestamp, maindeck=maindeck, sideboard=sideboard))
             except DraftDataParseError as inner_ex:
                 inner_ex.message += f" This occurred while parsing a draft log, \
                 in the exportString for user {name}."
@@ -190,6 +206,9 @@ class DraftLog(DraftData):
         service.write_to_sheet(cell_values,
                                cube.submission_info.spreadsheet_id,
                                cube.submission_info.draftlog)
+        
+        for deck in self.deck_lists:
+            deck.save_to_spreadsheet(service, cube)
 
 class DraftDataParseError(Exception):
     """Raised when a DraftData doesn't recognize the first character of a given input.
@@ -199,21 +218,3 @@ class DraftDataParseError(Exception):
         super().__init__()
         self.first_char = first_char
         self.message = f"Could not determine data type from beginning character {first_char}."
-
-if __name__ == "__main__":
-    import chardet
-
-    DECK_FILE_PATH = r"C:\Users\sgold\Documents\Arena Cube Drafts\take_me_to_church.txt"
-    LOG_FILE_PATH = r"C:\Users\sgold\Downloads\DraftLog_APCd.txt"
-
-
-
-    deck_bytes = open(DECK_FILE_PATH, 'rb').read()
-    deck = deck_bytes.decode(chardet.detect(deck_bytes)["encoding"])
-    deck_data = DraftData.create(deck, "Deck Submitter", datetime.datetime.now())
-    print(deck_data.card_list())
-    print(deck_data.timestamp)
-    log_bytes = open(LOG_FILE_PATH, 'rb').read()
-    log = log_bytes.decode(chardet.detect(log_bytes)["encoding"])
-    log_data = DraftData.create(log, "Log Submitter", datetime.datetime.now())
-    #print(log_data.data)
