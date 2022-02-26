@@ -3,10 +3,10 @@ import json
 import requests
 from models.cubelist import CubeList, CubeListEncoder
 
-def update_cube_cards(cube_name: str=None):
+def update_cube_cards(cube_file_path: str = "config/cubes.json", cube_name: str=None):
     """Updates a given cube list
     with the current contents of the CubeCobra list."""
-    with open("config/cubes.json", 'r') as cubes_file:
+    with open(cube_file_path, 'r') as cubes_file:
         cube_list = CubeList.from_json(json.load(cubes_file))
         if cube_name: 
             update_cards_for_cube(cube_list, cube_name)
@@ -14,7 +14,7 @@ def update_cube_cards(cube_name: str=None):
             for cube_name in cube_list:
                 update_cards_for_cube(cube_list, cube_name)
 
-    with open("config/cubes.json", 'w') as cubes_file:
+    with open(cube_file_path, 'w') as cubes_file:
         cubes_file.write(json.dumps(cube_list.__dict__["data"],
                                     cls=CubeListEncoder,
                                     indent=4, separators=(',', ': ')))
